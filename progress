@@ -1,0 +1,15 @@
+1. check this out: https://pytorch.org/tutorials/beginner/nlp/sequence_models_tutorial.html
+https://cnvrg.io/pytorch-lstm/
+https://towardsdatascience.com/pytorch-lstms-for-time-series-data-cd16190929d7
+
+encoder: ena lstm pou pernaei olo to input embedding mia fora
+decoder: ena lstm pou pernaei ena ena to input token (enan arithmo sto sequence thn fora) kai bgazei to
+probability na einai sygkekrimeno element
+
+12/3
+ Questions:
+ giati bazoume log probability?
+
+ kanei predict synexeia to idio pragma
+TODO:
+1. na mhn episkeptete to same node sto idio sequence (aka mask) -> i think ok
