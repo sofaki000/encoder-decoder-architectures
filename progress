@@ -13,3 +13,14 @@ probability na einai sygkekrimeno element
  kanei predict synexeia to idio pragma
 TODO:
 1. na mhn episkeptete to same node sto idio sequence (aka mask) -> i think ok
+2. pame na baloume to last hidden state tou encoder, ston decoder ws hiddens state
+
+
+Experiments:
+1. ebala to last hidden state tou encoder ws hidden state tou decoder. fainetai na einai kalutero
+2. ebala ena akomh linear layer ston encoder. ta afhnei 4 output features -> xeiroterepse
+ebala na afhnei hidden_size*2 output features ->better loss, shit accuracy
+
+
+12/05:
+1. ebala na pairnei ola ta outputs tou encoder (oxi ta hidden states)
