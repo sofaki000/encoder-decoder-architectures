@@ -50,7 +50,8 @@ class EncoderModel(nn.Module):
       # self.layer_2 = nn.Linear(in_features=hidden_size, out_features=hidden_size*2)
 
    def forward(self, input):
-      embedded_input = self.embedding(input.to(torch.int64)) # (bs, seq_len, emb_size)
+      # embedded_input = self.embedding(input.to(torch.int64)) # (bs, seq_len, emb_size)
+      embedded_input = self.embedding(input)  # (bs, seq_len, emb_size)
 
       # pernaei mia mono fora to embedded input
       output, hidden = self.lstm(embedded_input)
