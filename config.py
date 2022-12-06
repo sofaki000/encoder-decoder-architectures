@@ -1,6 +1,6 @@
 
-loss_file_name = "enc_dec_loss_with_att"
-acc_file_name = "enc_dec_acc_with_att"
+loss_file_name = "loss_context_last_hid_state"
+acc_file_name = "acc_context_last_hid_state"
 train_size = 1000 #0
 input_sequence_length = 4
 emb_size = 128

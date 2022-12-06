@@ -1,0 +1,4 @@
+1. criterion
+ F.nll_loss(probs, y) performs better ~4% mean acc than  torch.nn.CrossEntropyLoss()
+2. lstm layers
+ added 2 lstm layers at encoder-> no significant change

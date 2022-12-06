@@ -1,61 +1,70 @@
 import torch
 from torch import optim
 import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from data_utilities.dataset import Dataset
+from models.model import EncoderModel, Seq2SeqModel, DecoderPointerAttentionModel
+import os
+import config
+from plot_utilities import plot_losses, plot_accuracies
+import statistics
 
+def test(model, X, Y):
+    probs = model(X)  # (bs, M, L)
+    _v, indices = torch.max(probs, 2)  # (bs, M)
 
-# from pointer_network import PointerNetwork
-def train(model, X, Y, batch_size, n_epochs):
+    correct_count = sum([1 if torch.equal(ind.data, y.data) else 0 for ind, y in zip(indices, Y)])
+
+    accuracy = correct_count / len(X) * 100
+
+    print(f'Acc: {accuracy:.2f}% ({correct_count}/{len(X)})')
+    return accuracy
+
+def train_model(model, train_loader, test_loader):
     model.train()
-    losses_per_epoch = []
-    optimizer = optim.Adam(model.parameters())
-    N = X.size(0)
-    L = X.size(1)
-    # M = Y.size(1)
-    for epoch in range(n_epochs + 1):
-        epoch_loss = 0.0
-        # for i in range(len(train_batches))
-        for i in range(0, N-batch_size, batch_size):
-            x = X[i:i+batch_size] # (bs, L)
-            y = Y[i:i+batch_size] # (bs, M)
+    optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
+    train_losses = []
+    accuracies_per_epochs = []
 
-            probs = model(x) # (bs, M, L)
-            outputs = probs.view(-1, L) # (bs*M, L)
-            # outputs = probs.view(L, -1).t().contiguous() # (bs*M, L)
-            y = y.view(-1) # (bs*M)
-            loss = F.nll_loss(outputs, y)
+    for epoch in range(config.n_epochs):
+        accuracy_at_epoch = []
+        running_loss = .0
+        for batch_idx, batch in enumerate(train_loader):
+            x, y = batch
+
+            probs = model(x)
+
+            # why he suggests doing that?
+            # probs = probs.view(-1 , input.size(1))
+            # y = y.view(-1)  # (bs*M)
+            # whats the difference? F.nll_loss(torch.stack(probs, dim=1).view(-1,input.size(1)), y.view(-1))
+            loss =  F.nll_loss(probs, y)
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            # for printing results
-            batch_s = outputs.shape[0]
-            epoch_loss += batch_s * loss.item()
+            # indexes = np.argmax(output.detach().numpy(), axis=1)
+            #predicted = input[np.argmax(F.softmax(output).detach().numpy(), axis=1)].numpy()
+            # print(f'Predicted: {tour_idx.numpy()[0]}')
+            # print(f'Expected:{target.numpy()}')
+            # if np.array_equal(tour_idx.numpy()[0], target.numpy()):
+            #     print("Equal!!!")
+
+            running_loss += loss.item()
 
         if epoch % 2 == 0:
-            print('epoch: {}, Loss: {:.5f}'.format(epoch, loss.item()))
-            # for _ in range(2): # random showing results
-            #     pick = np.random.randint(0, batch_size)
-            #     probs = probs.contiguous().view(batch_size, M, L).transpose(2, 1) # (bs, L, M)
-            #     y = y.view(batch_size, M)
-            #     print("predict: ", probs.max(1)[1].data[pick][0], probs.max(1)[1].data[pick][1],
-            #           "target  : ", y.data[pick][0], y.data[pick][1])
-            test(model, X, Y)
+             for  batch_test_idx, test_batch in enumerate(test_loader):
+                 x , y = test_batch
+                 test(model, x, y)
 
-        losses_per_epoch.append(epoch_loss)
-    return losses_per_epoch
+                 acc = test(model,  x, y)
+                 accuracy_at_epoch.append(acc)
+             mean_acc = statistics.mean(accuracy_at_epoch)
+             print(f'Mean acc:{mean_acc:.2f}%')
+             accuracies_per_epochs.append(mean_acc)
 
-def test(model, X, Y):
-    probs = model(X) # (bs, M, L)
-    _v, indices = torch.max(probs, 2) # (bs, M)
-    # show test examples
-    # for i in range(len(indices)):
-    #     print('-----')
-    #     print('test', [v for v in X[i].data])
-    #     print('label', [v for v in Y[i].data])
-    #     print('pred', [v for v in indices[i].data])
-    #     if torch.equal(Y[i].data, indices[i].data):
-    #         print('eq')
-    #     if i>20: break
-    correct_count = sum([1 if torch.equal(ind.data, y.data) else 0 for ind, y in zip(indices, Y)])
-    print('Acc: {:.2f}% ({}/{})'.format(correct_count/len(X)*100, correct_count, len(X)))
+        train_losses.append(running_loss)
+        print(f'Epoch {epoch}:, Loss={running_loss}')
+
+    return train_losses, accuracies_per_epochs

@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import config
+from models.attention import AdditiveAttention
 
 
 class LinearModel(nn.Module):
@@ -30,9 +31,21 @@ class Seq2SeqModel(nn.Module):
       self.decoder = decoder
 
    def forward(self, input):
+      encoder_output, encoder_hidden = self.encoder(input)
+      # the decoder output is the INDEX of sequence we suggest
+      #taking the enc output as context: return self.decoder(input, encoder_output)
+      return self.decoder(input=input, encoder_outputs=encoder_output, encoder_hidden_states=encoder_hidden)
+
+
+class Seq2SeqWithAdditiveAttention(nn.Module):
+   def __init__(self, encoder, decoder):
+      super(Seq2SeqWithAdditiveAttention, self).__init__()
+      self.encoder = encoder
+      self.decoder = decoder
+   def forward(self):
       encoder_output, hidden = self.encoder(input)
 
-      # the decoder output is the INDEX of sequence we suggest
+      aligned_encoded_output = AdditiveAttention()
       return self.decoder(input, encoder_output)
 
 class EncoderModel(nn.Module):
@@ -45,18 +58,21 @@ class EncoderModel(nn.Module):
       # layers
       self.embedding = nn.Embedding(num_embeddings=input_size,
                                     embedding_dim=emb_size)
-      self.lstm = nn.LSTM(emb_size, hidden_size,batch_first=True)
-
-      # self.layer_2 = nn.Linear(in_features=hidden_size, out_features=hidden_size*2)
+      self.lstm = nn.LSTM(emb_size,
+                          hidden_size,
+                          batch_first=True,
+                          num_layers=2)
 
    def forward(self, input):
       # embedded_input = self.embedding(input.to(torch.int64)) # (bs, seq_len, emb_size)
-      embedded_input = self.embedding(input)  # (bs, seq_len, emb_size)
+      embedded_input = self.embedding(input) # (bs, seq_len, emb_size)
 
       # pernaei mia mono fora to embedded input
-      output, hidden = self.lstm(embedded_input)
+      encoder_output, encoder_hidden = self.lstm(embedded_input)
 
-      return output, hidden
+      return encoder_output, encoder_hidden
+
+
 
 class DecoderModel(nn.Module):
    def __init__(self, input_size, emb_size, hidden_size, output_size):
@@ -66,19 +82,17 @@ class DecoderModel(nn.Module):
       self.sequence_length = input_size
       self.emb_size = emb_size
 
-      # if lstm is last layer:
-      # self.lstm = nn.LSTMCell(self.emb_size,# LSTMCell's input is always batch first
-      #                         output_size )
-
       #otherwise:
       self.lstm = nn.LSTMCell(self.emb_size,   self.hidden_size)
-      self.layer_2 = nn.Linear(in_features=self.hidden_size , out_features=output_size)
-   def init_state(self, encoder_outputs):
-      encoder_outputs = encoder_outputs.transpose(1,0)
-      return encoder_outputs[-1]
-   def forward(self, input, encoder_output):
+      self.layer_2 = nn.Linear(in_features=self.hidden_size, out_features=output_size)
 
-      cell_state = self.init_state(encoder_output)
+   def get_encoder_context(self, encoder_outputs):
+      encoder_outputs = encoder_outputs.transpose(1,0)
+      return encoder_outputs[-1] # pairnoume to teleutaio state -> CONTEXT VECTOR
+
+   def forward(self, input, encoder_outputs, encoder_hidden_states):
+
+      encoder_context = self.get_encoder_context(encoder_outputs)
 
       sequence_length = input.shape[1]
       batch_size = input.shape[0]
@@ -95,7 +109,7 @@ class DecoderModel(nn.Module):
       # pernaei ena ena ta tokens kai bgazei to probability tou kathena element gia to
       # sygkekrimeno koutaki
       for i in range(self.sequence_length): # gia kathe thesi, tha broume poio element theloume pio poly
-         out, hidden = self.lstm(decoder_input, (hidden, cell_state))
+         out, hidden = self.lstm(decoder_input, (hidden, encoder_context))
 
          out = self.layer_2(out)
 
@@ -128,16 +142,18 @@ class DecoderModel(nn.Module):
 
 
 
-class DecoderAttentionModel(nn.Module):
+
+
+class DecoderPointerAttentionModel(nn.Module):
    def __init__(self, input_size, emb_size, hidden_size, output_size):
-      super(DecoderAttentionModel, self).__init__()
+      super(DecoderPointerAttentionModel, self).__init__()
 
       self.hidden_size = hidden_size
       self.sequence_length = input_size
       self.emb_size = emb_size
 
       self.lstm = nn.LSTMCell(self.emb_size,# LSTMCell's input is always batch first
-                          self.hidden_size )
+                          self.hidden_size)
 
       self.layer_2 = nn.Linear(in_features=self.hidden_size , out_features=output_size)
       self.weight_size = config.weight_size
@@ -170,7 +186,6 @@ class DecoderAttentionModel(nn.Module):
          # MONO TO HIDDEN STATE TOU
          # output = self.layer_2(out)
          # out = F.softmax(output)
-
          blend1 = self.W1(encoder_output.transpose(1, 0))  # (L, bs, W)
          blend2 = self.W2(hidden)  # (bs, W)
          blend_sum = F.tanh(blend1 + blend2)  # (L, bs, W)

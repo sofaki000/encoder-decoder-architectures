@@ -17,6 +17,12 @@ probability na einai sygkekrimeno element
  giati bazoume log probability?
  kanei predict synexeia to idio pragma
 
+POIO EINAI TO CONTEXT VECTOR? TI XRHSIMOPOIEI O DECODER?
+TO TELEUTAIO OUTPUT TOU ENCODER H TO TELEUTAIO HIDDEN STATE TOU ENCODER?
+Apanthsh:
+genika to context mporeis na to diamorfwseis opws theleis apo ta encoder
+outputs kai ta encoder hidden states! o decoder thelei apla ena context apo ton
+encoder. auto mporeis na to kaneis oti thes esy.
 
 Experiments:
 1. ebala to last hidden state tou encoder ws hidden state tou decoder. fainetai na einai kalutero
@@ -26,3 +32,5 @@ ebala na afhnei hidden_size*2 output features ->better loss, shit accuracy
 
 12/05:
 1. ebala na pairnei ola ta outputs tou encoder (oxi ta hidden states)
+12/06
+1. ebala thn dataset klash
