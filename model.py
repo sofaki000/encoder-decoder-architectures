@@ -32,8 +32,7 @@ class Seq2SeqModel(nn.Module):
    def forward(self, input):
       encoder_output, hidden = self.encoder(input)
 
-
-      # the decoder output is the sequence we suggest (not the indexes of the sequence, the actual sequence)
+      # the decoder output is the INDEX of sequence we suggest
       return self.decoder(input, encoder_output)
 
 class EncoderModel(nn.Module):
@@ -44,21 +43,17 @@ class EncoderModel(nn.Module):
       self.sequence_length = input_size
 
       # layers
-      self.embedding = nn.Embedding(num_embeddings=input_size, embedding_dim=emb_size)
-      self.lstm = nn.LSTM(emb_size, hidden_size)
+      self.embedding = nn.Embedding(num_embeddings=input_size,
+                                    embedding_dim=emb_size)
+      self.lstm = nn.LSTM(emb_size, hidden_size,batch_first=True)
 
       # self.layer_2 = nn.Linear(in_features=hidden_size, out_features=hidden_size*2)
 
    def forward(self, input):
-      embedded_input = self.embedding(input.to(torch.int64))
-      batch_size = 1
-      hidden_initial = Variable(torch.zeros(batch_size, self.hidden_size))
-      c_0 = Variable(torch.zeros(batch_size, self.hidden_size))
+      embedded_input = self.embedding(input.to(torch.int64)) # (bs, seq_len, emb_size)
 
       # pernaei mia mono fora to embedded input
-      output, hidden = self.lstm(embedded_input, (hidden_initial, c_0))
-
-      # output = self.layer_2(output)
+      output, hidden = self.lstm(embedded_input)
 
       return output, hidden
 
@@ -68,64 +63,120 @@ class DecoderModel(nn.Module):
 
       self.hidden_size = hidden_size
       self.sequence_length = input_size
+      self.emb_size = emb_size
 
-      # layers
-      # self.embedding = nn.Embedding(num_embeddings=input_size, embedding_dim=emb_size)
-      # self.lstm = nn.LSTM(emb_size, hidden_size)
-      # to lstm layer pairnei kateutheian apo encoder output
-      self.lstm = nn.LSTM(config.node_features, self.hidden_size) # nn.LSTM(input_size, hidden_size)
+      # if lstm is last layer:
+      # self.lstm = nn.LSTMCell(self.emb_size,# LSTMCell's input is always batch first
+      #                         output_size )
+
+      #otherwise:
+      self.lstm = nn.LSTMCell(self.emb_size,   self.hidden_size)
       self.layer_2 = nn.Linear(in_features=self.hidden_size , out_features=output_size)
-
+   def init_state(self, encoder_outputs):
+      encoder_outputs = encoder_outputs.transpose(1,0)
+      return encoder_outputs[-1]
    def forward(self, input, encoder_output):
-      # embedded_input = self.embedding(input.to(torch.int64))
 
-      cell_state = encoder_output[-1].unsqueeze(0)
+      cell_state = self.init_state(encoder_output)
 
-      sequence_length = input.shape[0]
-      batch_size = 1
+      sequence_length = input.shape[1]
+      batch_size = input.shape[0]
 
-      hidden_initial = Variable(torch.zeros(batch_size, self.hidden_size))
-      c_0 = Variable(torch.zeros(batch_size, self.hidden_size))
-
-      hidden = hidden_initial
-      probs = []
+      hidden = torch.zeros([batch_size, self.hidden_size])   # hidden_initial
 
       tour_logp = []
       tour_idx = []
 
       visited_mask = [ False for i in range(sequence_length)]
 
+      decoder_input = torch.zeros(batch_size, self.emb_size)
+      probs = []
       # pernaei ena ena ta tokens kai bgazei to probability tou kathena element gia to
       # sygkekrimeno koutaki
       for i in range(self.sequence_length): # gia kathe thesi, tha broume poio element theloume pio poly
-         out, hidden =self.lstm(input[i].unsqueeze(0).view(1, -1), (hidden, cell_state))
+         out, hidden = self.lstm(decoder_input, (hidden, cell_state))
 
-         output = self.layer_2(out)
+         out = self.layer_2(out)
 
-         probs = F.softmax(output)
+         out = F.softmax(out)
+         probs.append(out)
+         # mask = [0 for i in range(4)]
+         # indexes_of_visited_cities = [i for i, x in enumerate(visited_mask) if visited_mask[i] == True]
+         #
+         # for k in range(len(indexes_of_visited_cities)):
+         #     mask[indexes_of_visited_cities[k]]  = 1
+         #
+         # if False: # taking next position from distribution
+         #    m = torch.distributions.Categorical(probs)
+         #    ptr = m.sample()
+         #    logp = m.log_prob(ptr)
+         # else:
+         #    prob, ptr = torch.max(probs - torch.tensor(mask), 1)  # Greedy
+         #    logp = prob.log()
 
-         mask = [0 for i in range(4)]
+         # tour_logp.append(logp.unsqueeze(1))
+         # tour_idx.append(ptr.data.unsqueeze(1))
+         # visited_mask[ptr.data.item()] = True
 
-         indexes_of_visited_cities = [i for i, x in enumerate(visited_mask) if visited_mask[i] == True]
-         for k in range(len(indexes_of_visited_cities)):
-             #probs[0][index_of_visited_city] = 0 #np.Inf
-             mask[indexes_of_visited_cities[k]]  = 1
 
-         if False: # taking next position from distribution
-            m = torch.distributions.Categorical(probs)
-            ptr = m.sample()
-            logp = m.log_prob(ptr)
-         else:
-            prob, ptr = torch.max(probs - torch.tensor(mask), 1)  # Greedy
-            logp = prob.log()
+         # hidden = hidden[0]
+      # tour_idx = torch.cat(tour_idx, dim=1)  # (batch_size, seq_len)
+      # tour_logp = torch.cat(tour_logp, dim=1)  # (batch_size, seq_len)
+      probs = torch.stack(probs, dim=1)  # (bs, M, L) #make to tensor
+      return probs
 
-         tour_logp.append(logp.unsqueeze(1))
-         tour_idx.append(ptr.data.unsqueeze(1))
-         visited_mask[ptr.data.item()] = True
 
-         hidden = hidden[0]
 
-      tour_idx = torch.cat(tour_idx, dim=1)  # (batch_size, seq_len)
-      tour_logp = torch.cat(tour_logp, dim=1)  # (batch_size, seq_len)
+class DecoderAttentionModel(nn.Module):
+   def __init__(self, input_size, emb_size, hidden_size, output_size):
+      super(DecoderAttentionModel, self).__init__()
 
-      return tour_idx, tour_logp
+      self.hidden_size = hidden_size
+      self.sequence_length = input_size
+      self.emb_size = emb_size
+
+      self.lstm = nn.LSTMCell(self.emb_size,# LSTMCell's input is always batch first
+                          self.hidden_size )
+
+      self.layer_2 = nn.Linear(in_features=self.hidden_size , out_features=output_size)
+      self.weight_size = config.weight_size
+      self.W1 = nn.Linear(hidden_size,config.weight_size, bias=False)  # blending encoder
+      self.W2 = nn.Linear(hidden_size, config.weight_size, bias=False)  # blending decoder
+      self.vt = nn.Linear(config.weight_size, 1, bias=False)  # scaling sum of enc and dec by v.T
+
+
+   def init_state(self, encoder_outputs):
+      encoder_outputs = encoder_outputs.transpose(1,0)
+      return encoder_outputs[-1]
+   def forward(self, input, encoder_output):
+
+      cell_state = self.init_state(encoder_output)
+
+      sequence_length = input.shape[1]
+      batch_size = input.shape[0]
+
+      hidden = torch.zeros([batch_size, self.hidden_size])   # hidden_initial
+
+
+      decoder_input = torch.zeros(batch_size, self.emb_size)
+      probs = []
+      # pernaei ena ena ta tokens kai bgazei to probability tou kathena element gia to
+      # sygkekrimeno koutaki
+      for i in range(self.sequence_length): # gia kathe thesi, tha broume poio element theloume pio poly
+         out, hidden = self.lstm(decoder_input, (hidden, cell_state))
+
+         # DEN MAS NOIAZEI TO OUTPUT TOU DECODER
+         # MONO TO HIDDEN STATE TOU
+         # output = self.layer_2(out)
+         # out = F.softmax(output)
+
+         blend1 = self.W1(encoder_output.transpose(1, 0))  # (L, bs, W)
+         blend2 = self.W2(hidden)  # (bs, W)
+         blend_sum = F.tanh(blend1 + blend2)  # (L, bs, W)
+         out = self.vt(blend_sum).squeeze()  # (L, bs)
+         out = F.log_softmax(out.transpose(0, 1).contiguous(), -1)  # (bs, L)
+         probs.append(out)
+
+
+      probs = torch.stack(probs, dim=1)  # (bs, M, L) #make to tensor
+      return probs

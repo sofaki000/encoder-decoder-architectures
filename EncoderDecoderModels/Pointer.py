@@ -5,7 +5,8 @@ import torch.nn.functional as F
 
 
 class PointerNetwork(nn.Module):
-    def __init__(self, input_size, emb_size, weight_size, answer_seq_len, hidden_size=512, is_GRU=True):
+    def __init__(self, input_size, emb_size, weight_size,
+                 answer_seq_len, hidden_size=512, is_GRU=False):
         super(PointerNetwork, self).__init__()
 
         self.hidden_size = hidden_size
@@ -44,7 +45,7 @@ class PointerNetwork(nn.Module):
         # Decoding
         for i in range(self.answer_seq_len): # range(M)
             if self.is_GRU:
-                hidden = self.dec(decoder_input, hidden) # (bs, h), (bs, h)
+                hidden = self.dec(decoder_input, hidden) # (bs, hidden_size), (bs, hidden_size)
             else:
                 hidden, cell_state = self.dec(decoder_input, (hidden, cell_state)) # (bs, h), (bs, h)
 

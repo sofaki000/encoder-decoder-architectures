@@ -1,3 +1,9 @@
+TODO:
+1. na mhn episkeptete to same node sto idio sequence (aka mask) -> i think ok
+2. pame na baloume to last hidden state tou encoder, ston decoder ws hiddens state -> ok
+3. add batch size
+
+
 1. check this out: https://pytorch.org/tutorials/beginner/nlp/sequence_models_tutorial.html
 https://cnvrg.io/pytorch-lstm/
 https://towardsdatascience.com/pytorch-lstms-for-time-series-data-cd16190929d7
@@ -9,11 +15,7 @@ probability na einai sygkekrimeno element
 12/3
  Questions:
  giati bazoume log probability?
-
  kanei predict synexeia to idio pragma
-TODO:
-1. na mhn episkeptete to same node sto idio sequence (aka mask) -> i think ok
-2. pame na baloume to last hidden state tou encoder, ston decoder ws hiddens state
 
 
 Experiments:
